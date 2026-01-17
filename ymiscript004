@@ -1,0 +1,122 @@
+-- Delta Executor用：高速刻み移動型テレポート（引き戻し対策）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local tweenService = game:GetService("TweenService")
+
+-- GUI作成（見た目・名前は維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP"
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+local baseCFrame = nil
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        baseCFrame = root.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and baseCFrame then
+        -- 1. 物理干渉を完全に無視させる（Noclip状態）
+        local parts = {}
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") and v.CanCollide then
+                table.insert(parts, v)
+                v.CanCollide = false
+            end
+        end
+
+        -- 2. Tween（補間移動）を使用して、極短時間で移動させる
+        -- 直接 CFrame を書き換えるのではなく、サーバーが追従できる限界の速さで移動
+        local distance = (root.Position - baseCFrame.Position).Magnitude
+        local duration = distance / 500 -- 秒速500スタッド（テレポートに見える速さ）
+        
+        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+        local tween = tweenService:Create(root, tweenInfo, {CFrame = baseCFrame})
+        
+        -- 移動開始
+        tween:Play()
+        
+        -- 移動が終わるまで待機
+        tween.Completed:Wait()
+        
+        -- 3. 座標を確定させるための処理
+        root.Anchored = true
+        task.wait(0.1)
+        root.Anchored = false
+        
+        -- 4. 当たり判定を戻す
+        for _, p in pairs(parts) do
+            p.CanCollide = true
+        end
+        
+        -- 5. 速度をリセット
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hum:ChangeState(Enum.HumanoidStateType.Running)
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
