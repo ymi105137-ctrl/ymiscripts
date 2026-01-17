@@ -1,0 +1,120 @@
+-- Delta Executor用：キャラ所持検知・自動基地帰還スクリプト
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+-- GUI作成
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local ToggleBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+-- メインフレーム（ドラッグ可能）
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true -- GUIを動かせるように設定
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+-- タイトル
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+-- 基地設定ボタン
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+-- トグルボタン
+ToggleBtn.Parent = MainFrame
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.65, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.Text = "AUTO TP: OFF"
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+addCorner(ToggleBtn)
+
+-- 変数
+local baseCFrame = nil
+local isAutoEnabled = false
+local normalSpeed = 16 -- 通常時の速度（ゲームにより異なる場合は調整）
+
+-- 基地の場所を設定
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        baseCFrame = char.HumanoidRootPart.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+-- 機能のON/OFF
+ToggleBtn.MouseButton1Click:Connect(function()
+    isAutoEnabled = not isAutoEnabled
+    if isAutoEnabled then
+        ToggleBtn.Text = "AUTO TP: ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+    else
+        ToggleBtn.Text = "AUTO TP: OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+-- メインロジック：速度低下を検知してテレポート
+runService.Heartbeat:Connect(function()
+    if isAutoEnabled and baseCFrame then
+        local char = player.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        
+        -- 「キャラを持って足が遅くなった状態」を検知（通常速度より低い場合）
+        if hum and root and hum.WalkSpeed < normalSpeed and hum.WalkSpeed > 0 then
+            
+            -- 衝突判定を消して壁抜けを可能にする
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+            
+            -- 強制テレポート
+            root.Anchored = true
+            root.CFrame = baseCFrame
+            task.wait(0.3) -- アイテムが同期するまで少し長めに待機
+            root.Anchored = false
+            
+            -- 連続発動を防ぐために一時停止
+            isAutoEnabled = false
+            ToggleBtn.Text = "AUTO TP: OFF"
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            
+            -- 速度を戻すための慣性リセット
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+    end
+end)
