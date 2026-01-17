@@ -1,0 +1,120 @@
+-- Delta Executor用：物理ステート強制介入型（最上位引き戻し対策）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+-- GUI作成（見た目・名前は維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP"
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+local baseCFrame = nil
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        -- 地面に埋まらないよう少しだけ上に保存
+        baseCFrame = root.CFrame + Vector3.new(0, 0.2, 0)
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and baseCFrame then
+        -- 1. サーバーの「移動履歴」を混乱させるために一瞬Anchored
+        root.Anchored = true
+        task.wait(0.05)
+        
+        -- 2. 物理演算を一時的に完全に切り離す（Physicsステート）
+        -- これにより、クライアント側で座標を書き換えた際の「反動」を消します
+        hum:ChangeState(Enum.HumanoidStateType.Physics)
+        
+        -- 3. 当たり判定をオフ（壁抜け・アイテム干渉防止）
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+
+        -- 4. 座標を10回連続で書き込み（強制同期）
+        -- 1回だけの書き換えだとサーバーに拒絶されやすいため、連続で送りつけます
+        for i = 1, 10 do
+            root.CFrame = baseCFrame
+            runService.Heartbeat:Wait()
+        end
+        
+        -- 5. 到着地で一瞬固定して、位置を「事実」にする
+        task.wait(0.1)
+        root.Anchored = false
+        
+        -- 6. ステートを「着地」に戻す
+        hum:ChangeState(Enum.HumanoidStateType.Landed)
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+        -- 7. 当たり判定を戻す
+        task.wait(0.1)
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = true end
+        end
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
