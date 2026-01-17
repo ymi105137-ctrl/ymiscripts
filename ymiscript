@@ -1,0 +1,106 @@
+-- Delta Executor用：座標保存・手動テレポート（見た目維持）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+
+-- GUI作成
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton") -- 名前を以前の TPButton に合わせます
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+-- メインフレーム（ドラッグ可能）
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+-- タイトル
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+-- 基地設定ボタン
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+-- テレポート実行ボタン (見た目と名前を維持)
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP" -- テキストを維持
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+-- 変数
+local baseCFrame = nil
+
+-- 基地の場所を設定
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        baseCFrame = char.HumanoidRootPart.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+-- ボタンを押した瞬間にテレポートを実行
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if root and baseCFrame then
+        -- 衝突判定を消して壁抜けを可能にする
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+        
+        -- 強制テレポート
+        root.Anchored = true
+        root.CFrame = baseCFrame
+        
+        -- アイテム（キャラ）が同期して一緒に飛ぶための待機時間
+        task.wait(0.3) 
+        
+        root.Anchored = false
+        
+        -- 速度をリセットして「引き戻し」を防止
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
