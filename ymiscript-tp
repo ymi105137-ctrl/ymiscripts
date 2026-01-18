@@ -1,0 +1,136 @@
+-- Delta / Xeno / Solara用：地点保存型・段階落下TPシステム
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+local tpLocations = {} -- 地点データ保存用
+
+-- GUI構築
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local NameBox = Instance.new("TextBox")
+local SaveBtn = Instance.new("TextButton")
+local ListFrame = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
+
+ScreenGui.Name = "Advanced_TP_Manager"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 220, 0, 320)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "TP Manager v2"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+
+NameBox.Parent = MainFrame
+NameBox.Position = UDim2.new(0.05, 0, 0.13, 0)
+NameBox.Size = UDim2.new(0.9, 0, 0, 30)
+NameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+NameBox.PlaceholderText = "場所の名前を入力..."
+NameBox.Text = ""
+NameBox.TextColor3 = Color3.new(1, 1, 1)
+addCorner(NameBox)
+
+SaveBtn.Parent = MainFrame
+SaveBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+SaveBtn.Size = UDim2.new(0.9, 0, 0, 30)
+SaveBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 100)
+SaveBtn.Text = "現在地を保存"
+SaveBtn.TextColor3 = Color3.new(1, 1, 1)
+SaveBtn.Font = Enum.Font.SourceSansBold
+addCorner(SaveBtn)
+
+ListFrame.Parent = MainFrame
+ListFrame.Position = UDim2.new(0.05, 0, 0.38, 0)
+ListFrame.Size = UDim2.new(0.9, 0, 0.58, 0)
+ListFrame.BackgroundTransparency = 1
+ListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ListFrame.ScrollBarThickness = 4
+
+UIListLayout.Parent = ListFrame
+UIListLayout.Padding = UDim.new(0, 5)
+
+-- テレポート実行関数（リクエスト内容を反映）
+local function executeTeleport(targetCFrame)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not root or not hum then return end
+
+    -- 1. 目的地の3スタッド上を空中の待機ポイントにする
+    local airPos = targetCFrame + Vector3.new(0, 3, 0)
+    
+    -- 2. 空中へワープして「硬直」させる
+    root.Anchored = true
+    root.CFrame = airPos
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    
+    -- 3. 約0.8秒間、空中で完全にフリーズ（サーバー同期）
+    task.wait(0.8)
+
+    -- 4. 硬直を解除して「落下」させる
+    root.Anchored = false
+    hum:ChangeState(Enum.HumanoidStateType.Freefall)
+
+    -- 5. 着地までのわずかな間、速度をリセットして反発を防ぐ
+    local t = tick()
+    while tick() - t < 0.3 do
+        root.AssemblyLinearVelocity = Vector3.new(0, -10, 0) -- 緩やかな落下速度
+        runService.Heartbeat:Wait()
+    end
+    
+    -- 6. 着地状態へ
+    hum:ChangeState(Enum.HumanoidStateType.Landed)
+end
+
+-- リスト更新
+local function updateList()
+    for _, child in pairs(ListFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    for name, cframe in pairs(tpLocations) do
+        local btn = Instance.new("TextButton")
+        btn.Parent = ListFrame
+        btn.Size = UDim2.new(1, -5, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        btn.Text = name
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        addCorner(btn)
+        
+        btn.MouseButton1Click:Connect(function()
+            executeTeleport(cframe)
+        end)
+    end
+    ListFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end
+
+-- 保存ボタン
+SaveBtn.MouseButton1Click:Connect(function()
+    local name = NameBox.Text
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if name ~= "" and root then
+        tpLocations[name] = root.CFrame
+        NameBox.Text = ""
+        updateList()
+    end
+end)
