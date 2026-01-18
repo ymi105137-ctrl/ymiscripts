@@ -97,7 +97,7 @@ TPButton.MouseButton1Click:Connect(function()
             root.CFrame = CFrame.new(currentPos + (direction * 1.5), targetPos)
             
             -- 速度（Velocity）をあえて少し持たせることで「動いている」証拠を作る
-            root.AssemblyLinearVelocity = direction * 50
+            root.AssemblyLinearVelocity = direction * 1.5
             
             runService.Heartbeat:Wait()
             
