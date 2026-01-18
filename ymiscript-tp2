@@ -1,0 +1,150 @@
+-- Delta / Xeno / Solara用：接地キル回避型TPシステム
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+local tpLocations = {} 
+
+-- GUI構築（見た目はそのまま）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local NameBox = Instance.new("TextBox")
+local SaveBtn = Instance.new("TextButton")
+local ListFrame = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
+
+ScreenGui.Name = "Final_SafeTP_Manager"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 220, 0, 320)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "Anti-Kill TP v3"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+
+NameBox.Parent = MainFrame
+NameBox.Position = UDim2.new(0.05, 0, 0.13, 0)
+NameBox.Size = UDim2.new(0.9, 0, 0, 30)
+NameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+NameBox.PlaceholderText = "名前を入力..."
+NameBox.Text = ""
+NameBox.TextColor3 = Color3.new(1, 1, 1)
+addCorner(NameBox)
+
+SaveBtn.Parent = MainFrame
+SaveBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+SaveBtn.Size = UDim2.new(0.9, 0, 0, 30)
+SaveBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 100)
+SaveBtn.Text = "ここを保存"
+SaveBtn.TextColor3 = Color3.new(1, 1, 1)
+SaveBtn.Font = Enum.Font.SourceSansBold
+addCorner(SaveBtn)
+
+ListFrame.Parent = MainFrame
+ListFrame.Position = UDim2.new(0.05, 0, 0.38, 0)
+ListFrame.Size = UDim2.new(0.9, 0, 0.58, 0)
+ListFrame.BackgroundTransparency = 1
+ListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ListFrame.ScrollBarThickness = 4
+
+UIListLayout.Parent = ListFrame
+UIListLayout.Padding = UDim.new(0, 5)
+
+-- 強力な着地同期関数
+local function executeSafeTeleport(targetCFrame)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not root or not hum then return end
+
+    -- 1. 移動中と着地直後の「Noclip（壁判定無視）」を強制維持
+    local nc; nc = runService.Stepped:Connect(function()
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end)
+
+    -- 2. 目的地の3スタッド上（空中）で1.2秒間フリーズ
+    local airPos = targetCFrame + Vector3.new(0, 3, 0)
+    root.Anchored = true
+    root.CFrame = airPos
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    task.wait(1.2)
+
+    -- 3. 「落下」ではなく「スライド降下」（超重要）
+    -- 0.05スタッドずつ刻んで、サーバーに正規の移動だと信じ込ませる
+    local steps = 60
+    for i = 1, steps do
+        root.CFrame = airPos:Lerp(targetCFrame, i/steps)
+        root.AssemblyLinearVelocity = Vector3.new(0, -0.1, 0) -- ほぼ静止状態で降下
+        runService.RenderStepped:Wait()
+    end
+
+    -- 4. 接地した瞬間にさらに0.5秒間「Anchored」で固定
+    -- これにより、サーバー側の「跳ね返りチェック」を無効化します
+    root.CFrame = targetCFrame
+    task.wait(0.5)
+
+    -- 5. 解除
+    root.Anchored = false
+    nc:Disconnect()
+    hum:ChangeState(Enum.HumanoidStateType.Landed)
+    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    -- 6. 当たり判定を少し遅れて戻す（地面に埋まって死ぬのを防ぐ）
+    task.delay(0.5, function()
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = true end
+            end
+        end
+    end)
+end
+
+-- 以下、リスト更新・ボタン処理（前回同様）
+local function updateList()
+    for _, child in pairs(ListFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    for name, cframe in pairs(tpLocations) do
+        local btn = Instance.new("TextButton")
+        btn.Parent = ListFrame
+        btn.Size = UDim2.new(1, -5, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        btn.Text = name
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        addCorner(btn)
+        btn.MouseButton1Click:Connect(function() executeSafeTeleport(cframe) end)
+    end
+    ListFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end
+
+SaveBtn.MouseButton1Click:Connect(function()
+    local name = NameBox.Text
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if name ~= "" and root then
+        tpLocations[name] = root.CFrame
+        NameBox.Text = ""
+        updateList()
+    end
+end)
