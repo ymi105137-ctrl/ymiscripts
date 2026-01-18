@@ -1,0 +1,134 @@
+-- Delta Executor用：超高速グライド（リスポーン検知回避型）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+-- GUI作成（見た目・名前は維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP"
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+local baseCFrame = nil
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        baseCFrame = root.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and baseCFrame then
+        -- 1. 移動中の衝突（壁）を無視するためにNoclipを有効化
+        local parts = {}
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                table.insert(parts, {p = v, c = v.CanCollide})
+                v.CanCollide = false
+            end
+        end
+
+        -- 2. サーバーの「ワープ検知」に触れない速度で移動
+        -- 瞬間移動ではなく、1秒間に約150スタッドの速度で高速移動させる
+        local targetPos = baseCFrame.Position + Vector3.new(0, 2, 0) -- 少し浮かせた場所
+        local distance = (targetPos - root.Position).Magnitude
+        local speed = 150 -- この速度がキルされない限界値。戻されるなら100に下げてください
+        local duration = distance / speed
+        local startTime = tick()
+        local startPos = root.Position
+
+        hum:ChangeState(Enum.HumanoidStateType.Physics) -- 物理挙動を無効化
+        
+        -- 移動実行ループ
+        local connection
+        connection = runService.Heartbeat:Connect(function()
+            local elapsed = tick() - startTime
+            local alpha = math.min(elapsed / duration, 1)
+            
+            -- 座標を滑らかに更新（軌跡を作る）
+            root.CFrame = CFrame.new(startPos:Lerp(targetPos, alpha))
+            root.AssemblyLinearVelocity = Vector3.new(0,0,0) -- 慣性でのキルを防止
+            
+            if alpha >= 1 then
+                connection:Disconnect()
+            end
+        end)
+
+        -- 移動完了まで待機
+        repeat task.wait() until tick() - startTime >= duration
+        
+        -- 3. 到着後の安定化
+        root.Anchored = true
+        task.wait(0.5) -- サーバーに位置を認めさせるための静止時間
+        root.Anchored = false
+        hum:ChangeState(Enum.HumanoidStateType.Landed)
+        
+        -- 4. 当たり判定を戻す
+        for _, data in pairs(parts) do
+            data.p.CanCollide = data.c
+        end
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
