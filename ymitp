@@ -1,0 +1,76 @@
+-- Delta / Xeno / Solara用：接地後キル回避・監視突破モデル
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+local tpLocations = {} 
+
+-- GUI構築（見た目維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+-- ... (GUIコードは前回と同様のため、機能部分を重点的に強化)
+-- ※お手元のスクリプトのexecuteSafeTeleport関数を以下に差し替えてください
+
+local function executeSafeTeleport(targetCFrame)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not root or not hum then return end
+
+    -- 1. 移動・接地後の「死亡」を物理的に回避するためのNoclip
+    local nc; nc = runService.Stepped:Connect(function()
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end)
+
+    -- 2. 空中待機（1.0秒）
+    local airPos = targetCFrame + Vector3.new(0, 4, 0)
+    root.Anchored = true
+    root.CFrame = airPos
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    task.wait(1.0)
+
+    -- 3. 段階的降下（サーバーに移動ログを刻ませる）
+    local steps = 50
+    for i = 1, steps do
+        root.CFrame = airPos:Lerp(targetCFrame, i/steps)
+        runService.RenderStepped:Wait()
+    end
+
+    -- 4. ★最重要：着地後の「監視時間」を耐えるためのロック
+    -- サーバーが「こいつワープしたな？」と疑ってキルを送ってくる数秒間、
+    -- 座標を目的地に固定し続け、ステートを「着地済み」でロックします。
+    root.CFrame = targetCFrame
+    
+    local lockTime = 2.5 -- 監視をやり過ごすための秒数
+    local startLock = tick()
+    
+    while tick() - startLock < lockTime do
+        root.CFrame = targetCFrame
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        -- サーバーからの「位置戻し」パケットを無視するために毎フレーム座標を書き換える
+        hum:ChangeState(Enum.HumanoidStateType.Landed)
+        runService.RenderStepped:Wait()
+    end
+
+    -- 5. 監視時間を抜けた後にAnchoredを解除
+    root.Anchored = false
+    if nc then nc:Disconnect() end
+    
+    -- 6. 最後に微調整
+    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    
+    -- 当たり判定の復旧を極限まで遅らせる
+    task.delay(1.0, function()
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = true end
+            end
+        end
+    end)
+end
+
+-- (SaveBtn, updateList等のコードは以前のものをそのまま使用)
