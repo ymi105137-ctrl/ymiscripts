@@ -87,7 +87,7 @@ TPButton.MouseButton1Click:Connect(function()
         -- 瞬間移動ではなく、1秒間に約150スタッドの速度で高速移動させる
         local targetPos = baseCFrame.Position + Vector3.new(0, 2, 0) -- 少し浮かせた場所
         local distance = (targetPos - root.Position).Magnitude
-        local speed = 100 -- この速度がキルされない限界値。戻されるなら100に下げてください
+        local speed = 50 -- この速度がキルされない限界値。戻されるなら100に下げてください
         local duration = distance / speed
         local startTime = tick()
         local startPos = root.Position
