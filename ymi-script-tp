@@ -1,0 +1,140 @@
+-- Delta / Xeno / Solara用：GUI表示修正・強制同期TP
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local runService = game:GetService("RunService")
+
+-- 既存の同じ名前のGUIを削除して重複を防ぐ
+if playerGui:FindFirstChild("MultiTP_System_v4") then
+    playerGui:FindFirstChild("MultiTP_System_v4"):Destroy()
+end
+
+local tpLocations = {} 
+
+-- GUI構築
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local NameBox = Instance.new("TextBox")
+local SaveBtn = Instance.new("TextButton")
+local ListFrame = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
+
+ScreenGui.Name = "MultiTP_System_v4"
+ScreenGui.Parent = playerGui -- 確実に表示されるPlayerGuiに変更
+ScreenGui.ResetOnSpawn = false -- 死んでもGUIが消えないように設定
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.5, -110, 0.4, -160) -- 画面中央付近に表示
+MainFrame.Size = UDim2.new(0, 220, 0, 320)
+MainFrame.Active = true
+MainFrame.Draggable = true -- PCならマウスで動かせます
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "MULTI TP MANAGER"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+NameBox.Parent = MainFrame
+NameBox.Position = UDim2.new(0.05, 0, 0.13, 0)
+NameBox.Size = UDim2.new(0.9, 0, 0, 30)
+NameBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+NameBox.PlaceholderText = "地点の名前を入力..."
+NameBox.Text = ""
+NameBox.TextColor3 = Color3.new(1, 1, 1)
+addCorner(NameBox)
+
+SaveBtn.Parent = MainFrame
+SaveBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+SaveBtn.Size = UDim2.new(0.9, 0, 0, 30)
+SaveBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 120)
+SaveBtn.Text = "現在の場所を保存"
+SaveBtn.TextColor3 = Color3.new(1, 1, 1)
+SaveBtn.Font = Enum.Font.SourceSansBold
+addCorner(SaveBtn)
+
+ListFrame.Parent = MainFrame
+ListFrame.Position = UDim2.new(0.05, 0, 0.38, 0)
+ListFrame.Size = UDim2.new(0.9, 0, 0, 180)
+ListFrame.BackgroundTransparency = 1
+ListFrame.ScrollBarThickness = 4
+ListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+UIListLayout.Parent = ListFrame
+UIListLayout.Padding = UDim.new(0, 5)
+
+--- テレポートロジック (前回の最強版を継承) ---
+local function executeUltraSafeTP(targetCFrame)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not root or not hum then return end
+
+    root.Anchored = true
+    local safeTarget = targetCFrame + Vector3.new(0, 2.5, 0)
+
+    -- Noclip
+    local nc = runService.Stepped:Connect(function()
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end)
+
+    root.CFrame = safeTarget
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    
+    -- 5秒間の強制同期（監視回避）
+    task.wait(5.0)
+
+    -- 接地
+    for i = 1, 30 do
+        root.CFrame = safeTarget:Lerp(targetCFrame, i/30)
+        runService.RenderStepped:Wait()
+    end
+
+    root.Anchored = false
+    nc:Disconnect()
+    hum:ChangeState(Enum.HumanoidStateType.Landed)
+end
+
+local function updateList()
+    for _, child in pairs(ListFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    for name, cframe in pairs(tpLocations) do
+        local btn = Instance.new("TextButton")
+        btn.Parent = ListFrame
+        btn.Size = UDim2.new(1, -10, 0, 30)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        btn.Text = name
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.SourceSans
+        addCorner(btn)
+        btn.MouseButton1Click:Connect(function() executeUltraSafeTP(cframe) end)
+    end
+    ListFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end
+
+SaveBtn.MouseButton1Click:Connect(function()
+    local name = NameBox.Text
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if name ~= "" and root then
+        tpLocations[name] = root.CFrame
+        NameBox.Text = ""
+        updateList()
+    end
+end)
