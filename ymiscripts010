@@ -1,0 +1,126 @@
+-- Delta Executor用：入れ替え型テレポート（サーバー追跡回避）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+-- GUI作成（見た目・名前は維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP"
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+local baseCFrame = nil
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        baseCFrame = root.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and baseCFrame then
+        -- 1. 物理的な「反発」の原因となる速度をすべて殺す
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 2. サーバー側のRaycast（障害物検知）を回避するために、一時的にキャラを少し浮かせ、当たり判定を消す
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+
+        -- 3. 「奈落（Void）」へ一瞬送り、サーバーの追跡をリセットする（一部のアンチチートに有効）
+        local oldPos = root.CFrame
+        root.CFrame = CFrame.new(root.Position.X, -500, root.Position.Z)
+        task.wait(0.1)
+
+        -- 4. 目的地へテレポートし、そこで「硬直スタンプ」
+        -- 地面の少し上でAnchoredにして、サーバーに「ここが着地点だ」と認めさせる
+        root.CFrame = baseCFrame + Vector3.new(0, 2, 0)
+        root.Anchored = true
+        
+        -- 5. 1.5秒間、猛烈な勢いで座標を固定（サーバーへの多重送信）
+        local t = tick()
+        while tick() - t < 1.5 do
+            root.CFrame = baseCFrame + Vector3.new(0, 1.5, 0)
+            runService.Heartbeat:Wait()
+        end
+        
+        -- 6. ゆっくり接地（前回のSlow-Landingを継承）
+        for i = 1, 20 do
+            root.CFrame = baseCFrame + Vector3.new(0, 1.5 - (i/20 * 1.5), 0)
+            runService.Heartbeat:Wait()
+        end
+        
+        -- 7. 最終固定
+        root.Anchored = false
+        hum:ChangeState(Enum.HumanoidStateType.Landed)
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        task.wait(0.3)
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = true end
+        end
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
