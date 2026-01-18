@@ -1,0 +1,121 @@
+-- Delta Executor用：高速自動走行（検知回避型）
+local player = game.Players.LocalPlayer
+local coreGui = game:GetService("CoreGui")
+local runService = game:GetService("RunService")
+
+-- GUI作成（見た目・名前は維持）
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SetBaseBtn = Instance.new("TextButton")
+local TPButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "AutoTeleportSystem"
+ScreenGui.Parent = coreGui
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 130)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+
+local function addCorner(obj)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+end
+addCorner(MainFrame)
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0.3, 0)
+Title.Text = "BrainRot AutoTP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+
+SetBaseBtn.Parent = MainFrame
+SetBaseBtn.Position = UDim2.new(0.1, 0, 0.35, 0)
+SetBaseBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+SetBaseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SetBaseBtn.Text = "SET BASE POS"
+SetBaseBtn.TextColor3 = Color3.new(1, 1, 1)
+SetBaseBtn.Font = Enum.Font.SourceSansBold
+addCorner(SetBaseBtn)
+
+TPButton.Parent = MainFrame
+TPButton.Position = UDim2.new(0.1, 0, 0.65, 0)
+TPButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+TPButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+TPButton.Text = "CARRY & TP"
+TPButton.TextColor3 = Color3.new(1, 1, 1)
+TPButton.Font = Enum.Font.SourceSansBold
+addCorner(TPButton)
+
+local baseCFrame = nil
+
+SetBaseBtn.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        baseCFrame = root.CFrame
+        SetBaseBtn.Text = "SAVED!"
+        task.wait(1)
+        SetBaseBtn.Text = "SET BASE POS"
+    end
+end)
+
+TPButton.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and baseCFrame then
+        -- 1. 壁を無視するための常時Noclip
+        local noclipLoop = runService.Stepped:Connect(function()
+            if char then
+                for _, v in pairs(char:GetDescendants()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
+            end
+        end)
+
+        -- 2. 「テレポート」ではなく「凄まじい速さで目的地へ歩く」処理
+        -- サーバーが許容する最大級の移動を1フレームごとに分割して実行
+        local targetPos = baseCFrame.Position
+        
+        -- 移動が完了するまでループ
+        while (root.Position - targetPos).Magnitude > 3 do
+            local currentPos = root.Position
+            local direction = (targetPos - currentPos).Unit
+            
+            -- サーバーが「移動」として認識できる最小単位（0.5〜1.0スタッド）で座標を更新
+            -- これにより「ワープ」判定を回避します
+            root.CFrame = CFrame.new(currentPos + (direction * 1.5), targetPos)
+            
+            -- 速度（Velocity）をあえて少し持たせることで「動いている」証拠を作る
+            root.AssemblyLinearVelocity = direction * 50
+            
+            runService.Heartbeat:Wait()
+            
+            -- 安全装置：もし死んだらループを抜ける
+            if not char or not char:FindFirstChild("Humanoid") or hum.Health <= 0 then break end
+        end
+
+        -- 3. 到着
+        root.CFrame = baseCFrame
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        noclipLoop:Disconnect()
+        
+        TPButton.Text = "SUCCESS!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    elseif not baseCFrame then
+        TPButton.Text = "SET POS FIRST!"
+        task.wait(1)
+        TPButton.Text = "CARRY & TP"
+    end
+end)
