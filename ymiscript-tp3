@@ -1,0 +1,81 @@
+-- Delta / Xeno / Solara用：座標自動取得 ＆ 納品テレポート
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+local coreGui = game:GetService("CoreGui")
+
+-- 既存のGUIを削除
+if coreGui:FindFirstChild("BrainRot_AutoUI") then
+    coreGui:FindFirstChild("BrainRot_AutoUI"):Destroy()
+end
+
+-- --- 1. 座標の自動取得（実行した瞬間の位置を納品場所に設定） ---
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local collectPos = root.Position -- 実行時の立ち位置を「基地/納品所」として記憶
+
+print("座標を取得しました: " .. tostring(collectPos))
+
+-- --- 2. GUI構築 ---
+local ScreenGui = Instance.new("ScreenGui")
+local Button = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Name = "BrainRot_AutoUI"
+ScreenGui.Parent = coreGui
+
+-- 右側に配置
+Button.Size = UDim2.new(0, 160, 0, 60)
+Button.Position = UDim2.new(1, -20, 0.5, 0)
+Button.AnchorPoint = Vector2.new(1, 0.5)
+Button.BackgroundColor3 = Color3.fromRGB(255, 30, 30) -- 納品用の赤
+Button.BorderSizePixel = 0
+Button.Text = "納品所にワープ"
+Button.TextColor3 = Color3.new(1, 1, 1)
+Button.Font = Enum.Font.GothamBlack -- 太字
+Button.TextSize = 18
+
+-- 角丸設定
+UICorner.CornerRadius = UDim.new(0, 15)
+UICorner.Parent = Button
+
+-- --- 3. 安定化テレポートロジック ---
+local function teleportToCollect()
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- A. 準備：Noclip（壁抜け）を有効化
+    local nc = runService.Stepped:Connect(function()
+        for _, v in pairs(character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end)
+
+    -- B. 移動：空中を経由して接地（アンチチート回避）
+    hrp.Anchored = true
+    local targetCFrame = CFrame.new(collectPos + Vector3.new(0, 3, 0)) -- 3スタッド上にワープ
+    hrp.CFrame = targetCFrame
+    task.wait(0.5) -- サーバーとの同期
+
+    -- C. 降下：ゆっくりと地面へ
+    for i = 1, 20 do
+        hrp.CFrame = targetCFrame:Lerp(CFrame.new(collectPos), i/20)
+        runService.RenderStepped:Wait()
+    end
+
+    -- D. 完了：固定解除
+    hrp.Anchored = false
+    nc:Disconnect()
+    
+    -- 衝突判定を戻す
+    for _, v in pairs(character:GetDescendants()) do
+        if v:IsA("BasePart") then v.CanCollide = true end
+    end
+end
+
+Button.MouseButton1Click:Connect(teleportToCollect)
+
+-- 座標取得完了の通知
+local hint = Instance.new("Hint", coreGui)
+hint.Text = "納品場所を登録しました！ [ " .. math.floor(collectPos.X) .. ", " .. math.floor(collectPos.Y) .. ", " .. math.floor(collectPos.Z) .. " ]"
+task.delay(5, function() hint:Destroy() end)
