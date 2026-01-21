@@ -1,0 +1,61 @@
+-- Delta用：距離判定式・自動納品スクリプト
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+-- 1. 座標の自動取得（基地に立って実行）
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local collectPos = root.Position
+local collectCFrame = root.CFrame
+
+print("--- Delta Auto-Collect Loaded ---")
+print("基地を登録しました。誰かを担ぐと自動で戻ります。")
+
+-- 2. 状態管理
+local isTeleporting = false
+
+runService.Heartbeat:Connect(function()
+    if isTeleporting then return end
+
+    -- 周囲のプレイヤーをスキャン
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local targetRoot = p.Character.HumanoidRootPart
+            local dist = (targetRoot.Position - root.Position).Magnitude
+            
+            -- 【担ぎ判定】距離が 3.5 スタッド以内（ほぼ密着）なら担いだとみなす
+            if dist < 3.5 then
+                isTeleporting = true
+                print("ターゲット確保！テレポート開始...")
+
+                -- 検知回避ロジック
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                hum.PlatformStand = true -- ラグドール化
+                root.Anchored = true
+                
+                -- 上空へ回避
+                local airPos = collectCFrame * CFrame.new(0, 15, 0)
+                root.CFrame = airPos
+                task.wait(0.7)
+                
+                -- ゆっくり着地（リスポーン対策）
+                local steps = 35
+                for i = 1, steps do
+                    root.CFrame = airPos:Lerp(collectCFrame, i/steps)
+                    root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                    runService.RenderStepped:Wait()
+                end
+                
+                task.wait(1.5) -- 納品確定待ち
+                
+                root.Anchored = false
+                hum.PlatformStand = false
+                
+                print("完了。3秒後に再待機します。")
+                task.wait(3)
+                isTeleporting = false
+                break
+            end
+        end
+    end
+end)
