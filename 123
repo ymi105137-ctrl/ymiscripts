@@ -1,61 +1,68 @@
--- Delta用：距離判定式・自動納品スクリプト
+-- Delta用：アイテム名指定・自動納品スクリプト
 local player = game.Players.LocalPlayer
 local runService = game:GetService("RunService")
 
--- 1. 座標の自動取得（基地に立って実行）
+-- 1. 座標の自動取得（最初に赤い納品ゾーンに立って実行）
 local char = player.Character or player.CharacterAdded:Wait()
 local root = char:WaitForChild("HumanoidRootPart")
 local collectPos = root.Position
 local collectCFrame = root.CFrame
 
-print("--- Delta Auto-Collect Loaded ---")
-print("基地を登録しました。誰かを担ぐと自動で戻ります。")
+print("--- 納品所を登録しました ---")
 
 -- 2. 状態管理
 local isTeleporting = false
 
-runService.Heartbeat:Connect(function()
+-- 【重要】担いだ時に出現するアイテムの名前をここに入れます
+-- 前回のデバッグで反応した際の名前がわかれば、それに書き換えてください
+local CARRY_ITEM_NAMES = {"Handle", "Carry", "GrabbedPlayer", "Brainrot"} 
+
+local function checkItem(obj)
     if isTeleporting then return end
+    
+    -- 手に持ったものがツールであるか確認
+    if obj:IsA("Tool") or obj.Name == "Handle" then
+        -- 特定の「担ぎ用」の名前、もしくは「ブレインロッド」以外のものを除外したい場合
+        -- ここでは「手になにかを持った」という事象をより正確に捉えます
+        
+        isTeleporting = true
+        print("担ぎ（アイテム保持）を検知: " .. obj.Name)
 
-    -- 周囲のプレイヤーをスキャン
-    for _, p in pairs(game.Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local targetRoot = p.Character.HumanoidRootPart
-            local dist = (targetRoot.Position - root.Position).Magnitude
-            
-            -- 【担ぎ判定】距離が 3.5 スタッド以内（ほぼ密着）なら担いだとみなす
-            if dist < 3.5 then
-                isTeleporting = true
-                print("ターゲット確保！テレポート開始...")
+        -- --- 検知回避テレポート ---
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        hum.PlatformStand = true 
+        root.Anchored = true
+        
+        local airPos = collectCFrame * CFrame.new(0, 15, 0)
+        root.CFrame = airPos
+        task.wait(0.7) 
+        
+        -- 段階降下（リスポーン防止）
+        local steps = 40 
+        for i = 1, steps do
+            root.CFrame = airPos:Lerp(collectCFrame, i/steps)
+            root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            runService.RenderStepped:Wait()
+        end
+        
+        task.wait(1.5)
+        root.Anchored = false
+        hum.PlatformStand = false
+        
+        task.wait(3) 
+        isTeleporting = false
+    end
+end
 
-                -- 検知回避ロジック
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                hum.PlatformStand = true -- ラグドール化
-                root.Anchored = true
-                
-                -- 上空へ回避
-                local airPos = collectCFrame * CFrame.new(0, 15, 0)
-                root.CFrame = airPos
-                task.wait(0.7)
-                
-                -- ゆっくり着地（リスポーン対策）
-                local steps = 35
-                for i = 1, steps do
-                    root.CFrame = airPos:Lerp(collectCFrame, i/steps)
-                    root.AssemblyLinearVelocity = Vector3.new(0,0,0)
-                    runService.RenderStepped:Wait()
-                end
-                
-                task.wait(1.5) -- 納品確定待ち
-                
-                root.Anchored = false
-                hum.PlatformStand = false
-                
-                print("完了。3秒後に再待機します。")
-                task.wait(3)
-                isTeleporting = false
-                break
-            end
+-- キャラクターに何かが追加された（＝持った）瞬間に実行
+char.ChildAdded:Connect(checkItem)
+
+-- 既に何か持っている場合のためにループでも監視
+runService.Heartbeat:Connect(function()
+    if not isTeleporting then
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool and not table.find(CARRY_ITEM_NAMES, tool.Name) then
+            -- もし「普通のアイテム」で飛んでほしくない場合は、ここに除外リストを作ります
         end
     end
 end)
