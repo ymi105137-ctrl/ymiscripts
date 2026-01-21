@@ -1,0 +1,30 @@
+-- デバッグ用：キャラ内のオブジェクト変化を監視
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local coreGui = game:GetService("CoreGui")
+
+-- 画面上に通知を出すための設定
+local function notify(text)
+    local hint = Instance.new("Hint", coreGui)
+    hint.Text = "🚨 検知: " .. text
+    task.delay(3, function() hint:Destroy() end)
+    print("DEBUG: " .. text)
+end
+
+print("--- 監視を開始しました。キャラを担いでみてください ---")
+
+-- キャラクターの中に何かが追加されたら実行される
+char.DescendantAdded:Connect(function(descendant)
+    -- 追加されたものの名前とクラスを表示
+    notify("追加されました -> 名前: " .. descendant.Name .. " | 種類: " .. descendant.ClassName)
+    
+    -- 特に怪しいもの（接続系）は詳しく出力
+    if descendant:IsA("Weld") or descendant:IsA("ManualWeld") or descendant:IsA("BallSocketConstraint") then
+        warn("💡 これが『担ぎ判定』の可能性が高いです: " .. descendant.Name)
+    end
+end)
+
+-- 逆に消えた時も表示（テレポート完了の判断に使える）
+char.DescendantRemoving:Connect(function(descendant)
+    print("削除されました: " .. descendant.Name)
+end)
