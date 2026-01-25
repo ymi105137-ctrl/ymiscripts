@@ -1,0 +1,24 @@
+-- シンプルなAnti-Ragdoll（ラグドール無効化）
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+print("Anti-Ragdoll Enabled")
+
+runService.Heartbeat:Connect(function()
+    local char = player.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            -- ラグドールや転倒に関連する状態をすべて無効化
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.PlatformStand, false)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+            
+            -- もしラグドール状態になっていたら、強制的に起き上がり状態へ変更
+            if humanoid:GetState() == Enum.HumanoidStateType.Ragdoll or humanoid:GetState() == Enum.HumanoidStateType.Physics then
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end
+    end
+end)
