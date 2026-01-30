@@ -1,38 +1,53 @@
 local player = game.Players.LocalPlayer
-local char = player.Character or player.CharacterAdded:Wait()
-local root = char:WaitForChild("HumanoidRootPart")
+local runService = game:GetService("RunService")
 
--- GUI作成（スマホの画面にボタンを出す）
+-- GUI作成（スマホ画面にボタンを表示）
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
 local button = Instance.new("TextButton", screenGui)
 
-button.Name = "BlinkButton"
-button.Size = UDim2.new(0, 100, 0, 50) -- ボタンの大きさ
-button.Position = UDim2.new(0.5, -50, 0.8, -60) -- 画面下中央に配置
-button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-button.TextColor3 = Color3.fromRGB(255, 255, 255)
-button.Text = "LAG OFF"
-button.Active = true
-button.Draggable = true -- 指で好きな位置に動かせます
+button.Size = UDim2.new(0, 150, 0, 60)
+button.Position = UDim2.new(0.5, -75, 0.7, 0)
+button.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+button.Text = "STEP DASH: OFF"
+button.TextColor3 = Color3.new(1,1,1)
+button.Draggable = true -- 指で動かせる
 
-local blinking = false
+local dashing = false
+local dashDistance = 6 -- 1回にワープする距離（大きくするとより速く、カクカクします）
+local interval = 0.05 -- カクつきの間隔（秒）
 
--- Blinkのオンオフ処理
+-- ボタンをタップして切り替え
 button.MouseButton1Click:Connect(function()
-    blinking = not blinking
-    
-    if blinking then
-        -- 【ON】相手からはその場に固まって見える
-        button.Text = "LAG ON"
-        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- 赤色に
-        
-        -- 物理演算を止めることでサーバーへの位置送信をラグらせる
-        root.Anchored = true
+    dashing = not dashing
+    if dashing then
+        button.Text = "STEP DASH: ON"
+        button.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     else
-        -- 【OFF】最新の位置へ一気にワープ
-        button.Text = "LAG OFF"
-        button.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- 通常色に
+        button.Text = "STEP DASH: OFF"
+        button.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    end
+end)
+
+-- メインの処理（毎フレーム実行）
+runService.Heartbeat:Connect(function()
+    if not dashing then return end
+    
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    -- ジョイスティックを倒している時だけワープ
+    if root and hum and hum.MoveDirection.Magnitude > 0 then
+        -- 1. 進みたい方向に dashDistance 分だけ座標をずらす
+        local nextCFrame = root.CFrame + (hum.MoveDirection * dashDistance)
         
-        root.Anchored = false
+        -- 2. 速度をリセット（サーバーの速度制限検知を避ける）
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 3. 瞬間移動を実行
+        root.CFrame = nextCFrame
+        
+        -- 4. 指定した秒数だけ待つことで「カクッ」という動きを作る
+        task.wait(interval)
     end
 end)
