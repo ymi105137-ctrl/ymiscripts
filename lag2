@@ -1,0 +1,48 @@
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local hum = char:WaitForChild("Humanoid")
+
+-- GUI作成
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local button = Instance.new("TextButton", screenGui)
+
+button.Size = UDim2.new(0, 120, 0, 50)
+button.Position = UDim2.new(0.5, -60, 0.8, -60)
+button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+button.Text = "BLINK OFF"
+button.TextColor3 = Color3.new(1,1,1)
+button.Draggable = true
+
+local blinking = false
+
+button.MouseButton1Click:Connect(function()
+    blinking = not blinking
+    
+    if blinking then
+        -- 【ON】相手からは止まって見える
+        button.Text = "BLINK ON"
+        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        
+        -- ネットワーク同期をわざと遅らせる
+        settings().Network.IncomingReplicationLag = 1000
+    else
+        -- 【OFF】同期する瞬間の「死亡」を防止する処理
+        button.Text = "BLINK OFF"
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        
+        -- 1. 速度を完全にゼロにする（速度検知対策）
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 2. 一瞬だけ「ラグドールに近い状態」にして物理演算を無視させる
+        hum.PlatformStand = true
+        
+        -- 3. 同期を元に戻す
+        settings().Network.IncomingReplicationLag = 0
+        
+        -- 4. 少し待ってから動けるように戻す
+        task.wait(0.1)
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hum.PlatformStand = false
+    end
+end)
