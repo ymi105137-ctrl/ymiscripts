@@ -1,0 +1,51 @@
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+-- GUI作成
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local button = Instance.new("TextButton", screenGui)
+
+button.Size = UDim2.new(0, 150, 0, 60)
+button.Position = UDim2.new(0.5, -75, 0.7, 0)
+button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+button.Text = "NO-BACK DASH: OFF"
+button.TextColor3 = Color3.new(1,1,1)
+button.Draggable = true
+
+local dashing = false
+-- ★戻されないための黄金比
+local dashDistance = 3.5 -- 距離を欲張らない（戻されるなら3.0に下げる）
+local interval = 0.03 -- 戻される隙を与えない高速処理
+
+button.MouseButton1Click:Connect(function()
+    dashing = not dashing
+    button.Text = dashing and "DASHING..." or "NO-BACK DASH: OFF"
+    button.BackgroundColor3 = dashing and Color3.fromRGB(200, 50, 0) or Color3.fromRGB(45, 45, 45)
+end)
+
+runService.Heartbeat:Connect(function()
+    if not dashing then return end
+    
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    
+    if root and hum and hum.MoveDirection.Magnitude > 0 then
+        -- 1. 速度情報を完全に消去（これがないと戻されます）
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 2. サーバーの重力計算を騙す
+        -- 一瞬だけ「空中にいる」判定を混ぜることで移動の矛盾を隠します
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+        -- 3. 座標を更新（少しだけ上向きのベクトルを混ぜる）
+        local nextPos = root.CFrame + (hum.MoveDirection * dashDistance) + Vector3.new(0, 0.05, 0)
+        root.CFrame = nextPos
+        
+        -- 4. 実行直後に物理を再度固定
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 次のワープまで待機
+        task.wait(interval)
+    end
+end)
