@@ -1,55 +1,53 @@
 local player = game.Players.LocalPlayer
-local char = player.Character or player.CharacterAdded:Wait()
-local root = char:WaitForChild("HumanoidRootPart")
-local hum = char:WaitForChild("Humanoid")
+local runService = game:GetService("RunService")
 
--- GUI作成
+-- GUI作成（スマホ画面にボタンを表示）
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
 local button = Instance.new("TextButton", screenGui)
 
 button.Size = UDim2.new(0, 150, 0, 60)
 button.Position = UDim2.new(0.5, -75, 0.7, 0)
-button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-button.Text = "HOLD TO DASH"
+button.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+button.Text = "STEP DASH: OFF"
 button.TextColor3 = Color3.new(1,1,1)
-button.Draggable = true
+button.Draggable = true -- 指で動かせる
 
--- 速度制限を抜けるための設定
-local speedMultiplier = 3 -- 通常の3倍の速さで移動（調整可能）
-local blinking = false
+local dashing = false
+local dashDistance = 6 -- 1回にワープする距離（大きくするとより速く、カクカクします）
+local interval = 0.05 -- カクつきの間隔（秒）
 
--- ボタンを押している間だけラグを発生させる
-button.MouseButton1Down:Connect(function()
-    blinking = true
-    button.Text = "CHARGING..."
-    button.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
-    
-    -- サーバーへの送信をわざと遅らせる
-    settings().Network.IncomingReplicationLag = 1000
-    
-    -- ラグ中に移動速度を上げる（自分の画面上だけ）
-    hum.WalkSpeed = 16 * speedMultiplier
+-- ボタンをタップして切り替え
+button.MouseButton1Click:Connect(function()
+    dashing = not dashing
+    if dashing then
+        button.Text = "STEP DASH: ON"
+        button.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    else
+        button.Text = "STEP DASH: OFF"
+        button.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    end
 end)
 
--- ボタンを離した瞬間に同期（ダッシュ完了）
-button.MouseButton1Up:Connect(function()
-    blinking = false
-    button.Text = "DASH!"
-    button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+-- メインの処理（毎フレーム実行）
+runService.Heartbeat:Connect(function()
+    if not dashing then return end
     
-    -- 1. 速度検知による死亡を防ぐためのリセット
-    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hum.PlatformStand = true
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
     
-    -- 2. 同期を元に戻して一気にワープ
-    settings().Network.IncomingReplicationLag = 0
-    hum.WalkSpeed = 16 -- 通常速度に戻す
-    
-    task.wait(0.1)
-    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hum.PlatformStand = false
-    
-    task.wait(0.5)
-    button.Text = "HOLD TO DASH"
-    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    -- ジョイスティックを倒している時だけワープ
+    if root and hum and hum.MoveDirection.Magnitude > 0 then
+        -- 1. 進みたい方向に dashDistance 分だけ座標をずらす
+        local nextCFrame = root.CFrame + (hum.MoveDirection * dashDistance)
+        
+        -- 2. 速度をリセット（サーバーの速度制限検知を避ける）
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- 3. 瞬間移動を実行
+        root.CFrame = nextCFrame
+        
+        -- 4. 指定した秒数だけ待つことで「カクッ」という動きを作る
+        task.wait(interval)
+    end
 end)
