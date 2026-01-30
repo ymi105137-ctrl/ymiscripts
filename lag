@@ -1,0 +1,38 @@
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+
+-- GUI作成（スマホの画面にボタンを出す）
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local button = Instance.new("TextButton", screenGui)
+
+button.Name = "BlinkButton"
+button.Size = UDim2.new(0, 100, 0, 50) -- ボタンの大きさ
+button.Position = UDim2.new(0.5, -50, 0.8, -60) -- 画面下中央に配置
+button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Text = "LAG OFF"
+button.Active = true
+button.Draggable = true -- 指で好きな位置に動かせます
+
+local blinking = false
+
+-- Blinkのオンオフ処理
+button.MouseButton1Click:Connect(function()
+    blinking = not blinking
+    
+    if blinking then
+        -- 【ON】相手からはその場に固まって見える
+        button.Text = "LAG ON"
+        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- 赤色に
+        
+        -- 物理演算を止めることでサーバーへの位置送信をラグらせる
+        root.Anchored = true
+    else
+        -- 【OFF】最新の位置へ一気にワープ
+        button.Text = "LAG OFF"
+        button.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- 通常色に
+        
+        root.Anchored = false
+    end
+end)
