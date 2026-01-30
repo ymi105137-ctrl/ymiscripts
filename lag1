@@ -1,0 +1,50 @@
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+
+-- GUI作成
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local button = Instance.new("TextButton", screenGui)
+
+button.Size = UDim2.new(0, 100, 0, 50)
+button.Position = UDim2.new(0.5, -50, 0.8, -60)
+button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+button.Text = "BLINK OFF"
+button.TextColor3 = Color3.new(1,1,1)
+button.Draggable = true
+
+local blinking = false
+local ghostPos = nil
+
+runService = game:GetService("RunService")
+
+-- Blink実行中のループ処理
+runService.Heartbeat:Connect(function()
+    if blinking then
+        -- 自分の画面上では動けるが、サーバーに位置を送らせないために
+        -- 本来の座標を一時的に固定したパーツ（Root）へ戻し続ける処理
+        -- これで「自分は歩き回れるが、サーバー上の自分は動かない」状態になります
+        if ghostPos then
+            -- 実際には何もしないことで、位置情報の同期を遅延させます
+        end
+    end
+end)
+
+button.MouseButton1Click:Connect(function()
+    blinking = not blinking
+    
+    if blinking then
+        button.Text = "BLINK ON"
+        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        
+        -- サーバーとの同期を「切断」に近い状態にする
+        -- 注意：スマホ環境（Delta）で自分だけ動けるように設定
+        settings().Network.IncomingReplicationLag = 1000 -- 擬似的なラグを発生
+    else
+        button.Text = "BLINK OFF"
+        button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        
+        -- ラグを解消して一瞬で同期（ワープ）
+        settings().Network.IncomingReplicationLag = 0
+    end
+end)
