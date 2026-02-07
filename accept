@@ -1,34 +1,48 @@
--- 1. プレイヤーと画面の設定
 local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+-- 1. 監視用GUIの作成
 local sg = Instance.new("ScreenGui", player.PlayerGui)
+local frame = Instance.new("Frame", sg)
+frame.Size = UDim2.new(0, 220, 0, 150)
+frame.Position = UDim2.new(1, -230, 0.5, -75) -- 画面右側に配置
+frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+frame.BackgroundTransparency = 0.5
 
--- 2. ボタンの見た目を作る
-local btn = Instance.new("TextButton", sg)
-btn.Size = UDim2.new(0, 200, 0, 50)
-btn.Position = UDim2.new(0.5, -100, 0.1, 0) -- 画面上のほう
-btn.Text = "近くのパーツを調べる"
-btn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-btn.TextColor3 = Color3.new(1, 1, 1)
+local label = Instance.new("TextLabel", frame)
+label.Size = UDim2.new(1, -10, 1, -10)
+label.Position = UDim2.new(0, 5, 0, 5)
+label.BackgroundTransparency = 1
+label.TextColor3 = Color3.new(1, 1, 1)
+label.TextSize = 14
+label.TextXAlignment = Enum.TextXAlignment.Left
+label.TextYAlignment = Enum.TextYAlignment.Top
+label.Text = "Loading Memory Data..."
 
--- 3. ボタンを押した時の動き
-btn.MouseButton1Click:Connect(function()
+-- 2. 監視したい「メモリ項目」の定義
+local function updateMonitor()
     local char = player.Character
     if not char then return end
     
-    -- 自分の足元の座標を取得
-    local myPos = char.PrimaryPart.Position
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
     
-    -- 近くにあるパーツをすべて探す
-    for _, obj in pairs(game.Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            -- 自分との距離を計算
-            local distance = (obj.Position - myPos).Magnitude
-            
-            -- 5メートル以内にあるパーツの名前を表示
-            if distance < 5 then
-                print("発見: " .. obj.Name .. " (距離: " .. math.floor(distance) .. "m)")
-            end
-        end
+    if hum and root then
+        -- ここで「メモリ上の生データ」を文字列にまとめる
+        local data = {
+            "--- Memory Monitor ---",
+            "WalkSpeed: " .. math.floor(hum.WalkSpeed),
+            "JumpPower: " .. math.floor(hum.JumpPower),
+            "Health: " .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth),
+            "Position: " .. math.floor(root.Position.X) .. ", " .. math.floor(root.Position.Y) .. ", " .. math.floor(root.Position.Z),
+            "Velocity: " .. math.floor(root.AssemblyLinearVelocity.Magnitude),
+            "State: " .. tostring(hum:GetState().Name),
+            "----------------------",
+            "Ping: " .. math.floor(player:GetNetworkPing() * 1000) .. "ms"
+        }
+        label.Text = table.concat(data, "\n")
     end
-    print("--- 調査完了 ---")
-end)
+end
+
+-- 3. 毎フレーム実行して数値を更新
+runService.Heartbeat:Connect(updateMonitor)
