@@ -1,0 +1,38 @@
+-- 1. 変数の設定
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+-- 2. 通信ブロック（RemoteEvent Hooking）
+-- ゲームがサーバーに「移動速度を遅くしたよ」と報告するのを防ぎます
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+
+    -- 邪魔なRemoteEventをブロックする設定
+    -- ここにDexやRemoteSpyで見つけた「速度制限イベント名」を入れます
+    -- 一般的な名前（例: "UpdateSpeed", "WalkSpeedRemote", "SetSpeed"）を想定
+    if method == "FireServer" then
+        if self.Name:find("Speed") or self.Name:find("Walk") or self.Name:find("Slow") then
+            print("ブロック成功: " .. self.Name) -- 通信を捨てて何もしない
+            return nil 
+        end
+    end
+
+    return oldNamecall(self, ...)
+end)
+
+-- 3. 強制速度固定ループ
+-- 担いだ瞬間にゲーム側が WalkSpeed を書き換えても、0.01秒ごとに上書きし返します
+runService.Heartbeat:Connect(function()
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            -- 担いでいてもいなくても、常にこの速度にする
+            hum.WalkSpeed = 32 -- 好きな速さに変えてください（16が通常、32が2倍）
+        end
+    end
+end)
+
+print("--- 通信ブロック ＆ 速度固定 起動 ---")
