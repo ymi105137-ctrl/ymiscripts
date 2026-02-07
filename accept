@@ -1,48 +1,41 @@
 local player = game.Players.LocalPlayer
 local runService = game:GetService("RunService")
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local hum = char:WaitForChild("Humanoid")
 
--- 1. 監視用GUIの作成
-local sg = Instance.new("ScreenGui", player.PlayerGui)
-local frame = Instance.new("Frame", sg)
-frame.Size = UDim2.new(0, 220, 0, 150)
-frame.Position = UDim2.new(1, -230, 0.5, -75) -- 画面右側に配置
-frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-frame.BackgroundTransparency = 0.5
+-- [[ 設定セクション ]]
+local TARGET_SPEED = 45 -- 戻される場合は30〜40に下げて調整
+local blinkDistance = 2.5 -- 1フレームあたりの移動補正
 
-local label = Instance.new("TextLabel", frame)
-label.Size = UDim2.new(1, -10, 1, -10)
-label.Position = UDim2.new(0, 5, 0, 5)
-label.BackgroundTransparency = 1
-label.TextColor3 = Color3.new(1, 1, 1)
-label.TextSize = 14
-label.TextXAlignment = Enum.TextXAlignment.Left
-label.TextYAlignment = Enum.TextYAlignment.Top
-label.Text = "Loading Memory Data..."
-
--- 2. 監視したい「メモリ項目」の定義
-local function updateMonitor()
-    local char = player.Character
-    if not char then return end
-    
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    
-    if hum and root then
-        -- ここで「メモリ上の生データ」を文字列にまとめる
-        local data = {
-            "--- Memory Monitor ---",
-            "WalkSpeed: " .. math.floor(hum.WalkSpeed),
-            "JumpPower: " .. math.floor(hum.JumpPower),
-            "Health: " .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth),
-            "Position: " .. math.floor(root.Position.X) .. ", " .. math.floor(root.Position.Y) .. ", " .. math.floor(root.Position.Z),
-            "Velocity: " .. math.floor(root.AssemblyLinearVelocity.Magnitude),
-            "State: " .. tostring(hum:GetState().Name),
-            "----------------------",
-            "Ping: " .. math.floor(player:GetNetworkPing() * 1000) .. "ms"
-        }
-        label.Text = table.concat(data, "\n")
+-- 1. サーバーの監視を騙す（ジャンプ状態を維持）
+-- サーバーはジャンプ中の移動には少し寛容なため、状態を偽装します
+runService.Stepped:Connect(function()
+    if hum.MoveDirection.Magnitude > 0 then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
-end
+end)
 
--- 3. 毎フレーム実行して数値を更新
-runService.Heartbeat:Connect(updateMonitor)
+-- 2. メモリ上の数値を隠蔽（アンチチート対策）
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", function(self, key)
+    if not checkcaller() and self == hum and key == "WalkSpeed" then
+        return 16
+    end
+    return oldIndex(self, key)
+end)
+
+-- 3. 物理的な「戻し」を相殺する移動方式
+runService.Heartbeat:Connect(function()
+    if hum.MoveDirection.Magnitude > 0 then
+        -- 速度(Velocity)を直接上げず、座標(CFrame)を小刻みに書き換える
+        -- これによりサーバーの速度検知を回避します
+        local newCFrame = root.CFrame + (hum.MoveDirection * (TARGET_SPEED / 60))
+        
+        -- 物理的な勢い(Velocity)をゼロに固定して「戻される力」を消す
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        root.CFrame = newCFrame
+    end
+end)
+
+print("--- 戻され防止スピードハック 起動 ---")
