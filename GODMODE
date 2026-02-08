@@ -1,0 +1,65 @@
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+
+-- [[ 1. GUIの作成（死んでも消えない設定） ]]
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GodModeGui"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false -- ★これが重要！死んでもGUIが消えません
+
+local button = Instance.new("TextButton", screenGui)
+button.Size = UDim2.new(0, 160, 0, 60)
+button.Position = UDim2.new(0.5, -80, 0.1, 0)
+button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+button.Text = "GOD MODE: OFF"
+button.TextColor3 = Color3.new(1, 1, 1)
+button.Draggable = true
+
+local godEnabled = false
+
+-- [[ 2. 無敵化のメインロジック ]]
+local function applyGodMode()
+    local char = player.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        -- A. ダメージ判定自体を無効化する試み
+        hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) -- 死ぬ状態を拒否
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        
+        -- B. HPが減った瞬間にMAXまで戻す（超高速）
+        if hum.Health > 0 and hum.Health < hum.MaxHealth then
+            hum.Health = hum.MaxHealth
+        end
+    end
+end
+
+-- [[ 3. 通信ブロック（RemoteEventによるダメージを阻止） ]]
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if godEnabled and method == "FireServer" then
+        -- ゲームがサーバーに「ダメージを受けた」と報告するイベントを遮断
+        if self.Name:lower():find("damage") or self.Name:lower():find("hit") or self.Name:lower():find("death") then
+            return nil 
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- [[ 4. ループ実行とボタン連動 ]]
+button.MouseButton1Click:Connect(function()
+    godEnabled = not godEnabled
+    button.Text = godEnabled and "GOD MODE: ON" or "GOD MODE: OFF"
+    button.BackgroundColor3 = godEnabled and Color3.fromRGB(0, 180, 100) or Color3.fromRGB(40, 40, 40)
+end)
+
+runService.Heartbeat:Connect(function()
+    if godEnabled then
+        applyGodMode()
+    end
+end)
+
+print("God Mode GUI Loaded (Persistent)")
